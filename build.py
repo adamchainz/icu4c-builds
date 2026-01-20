@@ -99,18 +99,40 @@ def download_icu(version: str, dest_dir: Path) -> Path:
     return dest_dir / "icu" / "source"
 
 
-def build_unix(source_dir: Path, install_dir: Path) -> None:
+def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
     """Build ICU on Unix-like systems (Linux, macOS)."""
     run(["chmod", "+x", "configure", "runConfigureICU", "install-sh"], cwd=source_dir)
 
-    configure_args = [
-        "./configure",
-        f"--prefix={install_dir.absolute()}",
-        "--with-data-packaging=archive",
-        "--disable-samples",
-        "--disable-renaming",
-        "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
-    ]
+    system = platform.system()
+    if system == "Linux":
+        if platform_name == "linux-musl":
+            icu_platform = "Linux"
+        else:
+            icu_platform = "Linux/gcc"
+    elif system == "Darwin":
+        icu_platform = "macOS"
+    else:
+        icu_platform = None
+
+    if icu_platform:
+        configure_args = [
+            "./runConfigureICU",
+            icu_platform,
+            f"--prefix={install_dir.absolute()}",
+            "--with-data-packaging=archive",
+            "--disable-samples",
+            "--disable-renaming",
+            "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
+        ]
+    else:
+        configure_args = [
+            "./configure",
+            f"--prefix={install_dir.absolute()}",
+            "--with-data-packaging=archive",
+            "--disable-samples",
+            "--disable-renaming",
+            "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
+        ]
 
     run(configure_args, cwd=source_dir)
 
@@ -129,7 +151,6 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
 
     solution_file = source_dir / "allinone" / "allinone.sln"
 
-    # Build the solution
     run(
         [
             "msbuild",
@@ -140,34 +161,29 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
         ]
     )
 
-    # Copy binaries to install directory
     install_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine binary directory based on platform
     if platform == "Win32":
         bin_dir = source_dir / ".." / "bin"
         lib_dir = source_dir / ".." / "lib"
     elif platform == "x64":
         bin_dir = source_dir / ".." / "bin64"
         lib_dir = source_dir / ".." / "lib64"
-    else:  # ARM64
+    else:
         bin_dir = source_dir / ".." / "binARM64"
         lib_dir = source_dir / ".." / "libARM64"
 
-    # Copy files
     if bin_dir.exists():
         shutil.copytree(bin_dir, install_dir / "bin", dirs_exist_ok=True)
     if lib_dir.exists():
         shutil.copytree(lib_dir, install_dir / "lib", dirs_exist_ok=True)
 
-    # Copy headers
     include_src = source_dir / "common" / "unicode"
     include_dest = install_dir / "include" / "unicode"
     include_dest.mkdir(parents=True, exist_ok=True)
     if include_src.exists():
         shutil.copytree(include_src, include_dest, dirs_exist_ok=True)
 
-    # Copy data
     data_dir = source_dir / ".." / "data"
     if data_dir.exists():
         shutil.copytree(
@@ -255,7 +271,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # If we're on Linux and not already in Docker, run in Docker
     if args.platform in ("linux", "linux-musl") and not args.in_docker:
         build_in_docker(args.platform, args.arch)
         return
@@ -268,7 +283,7 @@ def main() -> None:
     source_dir = download_icu(ICU_VERSION, work_dir)
 
     if args.platform in ("linux", "linux-musl", "macos"):
-        build_unix(source_dir, install_dir)
+        build_unix(source_dir, install_dir, args.platform)
     elif args.platform == "windows":
         build_windows(source_dir, install_dir, args.arch)
     else:
