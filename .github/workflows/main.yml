@@ -18,26 +18,26 @@ jobs:
         include:
         - os: linux
           arch: aarch64
-        - os: linux
-          arch: i686
-        - os: linux
-          arch: x86_64
-        - os: linux-musl
-          arch: aarch64
-        - os: linux-musl
-          arch: i686
-        - os: linux-musl
-          arch: x86_64
-        - os: macos
-          arch: arm64
-        - os: macos
-          arch: x86_64
-        - os: windows
-          arch: AMD64
-        - os: windows
-          arch: x86
-        - os: windows
-          arch: ARM64
+        # - os: linux
+        #   arch: i686
+        # - os: linux
+        #   arch: x86_64
+        # - os: linux-musl
+        #   arch: aarch64
+        # - os: linux-musl
+        #   arch: i686
+        # - os: linux-musl
+        #   arch: x86_64
+        # - os: macos
+        #   arch: arm64
+        # - os: macos
+        #   arch: x86_64
+        # - os: windows
+        #   arch: AMD64
+        # - os: windows
+        #   arch: x86
+        # - os: windows
+        #   arch: ARM64
 
     runs-on:
       ${{
