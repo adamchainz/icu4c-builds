@@ -107,7 +107,6 @@ def build_unix(source_dir: Path, install_dir: Path) -> None:
         "./configure",
         f"--prefix={install_dir.absolute()}",
         "--with-data-packaging=archive",
-        "--disable-tests",
         "--disable-samples",
         "--disable-renaming",
         "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
