@@ -9,6 +9,8 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
+ICU_VERSION = "78.2"
+
 
 def run(cmd: list[str], **kwargs) -> None:
     """Run a subprocess command."""
@@ -16,6 +18,66 @@ def run(cmd: list[str], **kwargs) -> None:
     result = subprocess.run(cmd, **kwargs)
     if result.returncode != 0:
         raise SystemExit(result.returncode)
+
+
+def get_docker_image(platform_name: str, arch: str) -> str:
+    """Get the Docker image to use for Linux builds."""
+    try:
+        from cibuildwheel.options import _get_pinned_container_images
+
+        config = _get_pinned_container_images()
+        if platform_name == "linux":
+            return config[arch]["manylinux_2_28"]
+        else:  # linux-musl
+            return config[arch]["musllinux_1_2"]
+    except Exception as e:
+        print(f"Warning: Could not get pinned image from cibuildwheel: {e}")
+        if platform_name == "linux":
+            return f"quay.io/pypa/manylinux_2_28_{arch}"
+        else:
+            return f"quay.io/pypa/musllinux_1_2_{arch}"
+
+
+def docker_platform(arch: str) -> str:
+    """Convert architecture to Docker platform."""
+    if arch == "x86_64":
+        return "linux/amd64"
+    elif arch == "i686":
+        return "linux/386"
+    elif arch == "aarch64":
+        return "linux/arm64"
+    else:
+        return f"linux/{arch}"
+
+
+def build_in_docker(platform_name: str, arch: str) -> None:
+    """Build ICU inside a Docker container."""
+    image = get_docker_image(platform_name, arch)
+    docker_plat = docker_platform(arch)
+
+    work_dir = Path.cwd()
+
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{work_dir}:/work",
+        "-w",
+        "/work",
+        "--platform",
+        docker_plat,
+        image,
+        "python3",
+        "build.py",
+        "--platform",
+        platform_name,
+        "--arch",
+        arch,
+        "--in-docker",
+    ]
+
+    run(cmd)
 
 
 def download_icu(version: str, dest_dir: Path) -> Path:
@@ -115,29 +177,26 @@ def test_icu(install_dir: Path, version: str) -> None:
         print(f"Warning: Library not found at {lib_path}")
         return
 
-    try:
-        lib = ctypes.CDLL(str(lib_path))
+    lib = ctypes.CDLL(str(lib_path))
 
-        u_getVersion = lib.u_getVersion
-        u_getVersion.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
-        u_getVersion.restype = None
+    u_getVersion = lib.u_getVersion
+    u_getVersion.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
+    u_getVersion.restype = None
 
-        version_array = (ctypes.c_uint8 * 4)()
-        u_getVersion(version_array)
+    version_array = (ctypes.c_uint8 * 4)()
+    u_getVersion(version_array)
 
-        detected_version = f"{version_array[0]}.{version_array[1]}"
-        expected_version = ".".join(version.split(".")[:2])
+    detected_version = f"{version_array[0]}.{version_array[1]}"
+    expected_version = ".".join(version.split(".")[:2])
 
-        print(f"Detected ICU version: {detected_version}")
-        print(f"Expected ICU version: {expected_version}")
+    print(f"Detected ICU version: {detected_version}")
+    print(f"Expected ICU version: {expected_version}")
 
-        if detected_version == expected_version:
-            print("✓ ICU version check passed")
-        else:
-            print("✗ ICU version mismatch!")
-            raise SystemExit(1)
-    except Exception as e:
-        print(f"Warning: Could not test ICU library: {e}")
+    if detected_version == expected_version:
+        print("✓ ICU version check passed")
+    else:
+        print("✗ ICU version mismatch!")
+        raise SystemExit(1)
 
 
 def package_build(
@@ -157,10 +216,11 @@ def package_build(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build ICU from source")
-    parser.add_argument("--version", required=True, help="ICU version (e.g., 78.1)")
+    parser = argparse.ArgumentParser(description="Build ICU4C from source")
     parser.add_argument(
-        "--platform", required=True, help="Platform name (linux, macos, windows)"
+        "--platform",
+        required=True,
+        help="Platform name (linux, linux-musl, macos, windows)",
     )
     parser.add_argument(
         "--arch", required=True, help="Architecture (x86_64, aarch64, etc.)"
@@ -168,16 +228,24 @@ def main() -> None:
     parser.add_argument(
         "--output-dir", type=Path, default=Path("dist"), help="Output directory"
     )
+    parser.add_argument(
+        "--in-docker", action="store_true", help="Running inside Docker (internal flag)"
+    )
     args = parser.parse_args()
+
+    # If we're on Linux and not already in Docker, run in Docker
+    if args.platform in ("linux", "linux-musl") and not args.in_docker:
+        build_in_docker(args.platform, args.arch)
+        return
 
     work_dir = Path("build")
     work_dir.mkdir(exist_ok=True)
 
     install_dir = work_dir / "install"
 
-    source_dir = download_icu(args.version, work_dir)
+    source_dir = download_icu(ICU_VERSION, work_dir)
 
-    if args.platform in ("linux", "macos"):
+    if args.platform in ("linux", "linux-musl", "macos"):
         build_unix(source_dir, install_dir)
     elif args.platform == "windows":
         build_windows(source_dir, install_dir, args.arch)
@@ -185,10 +253,10 @@ def main() -> None:
         print(f"Unknown platform: {args.platform}")
         raise SystemExit(1)
 
-    test_icu(install_dir, args.version)
+    test_icu(install_dir, ICU_VERSION)
 
     args.output_dir.mkdir(exist_ok=True)
-    package_build(install_dir, args.output_dir, args.version, args.platform, args.arch)
+    package_build(install_dir, args.output_dir, ICU_VERSION, args.platform, args.arch)
 
     print("\n✓ Build complete!")
 
