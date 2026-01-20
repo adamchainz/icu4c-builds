@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Build ICU from source for the current platform."""
 
+from __future__ import annotations
+
 import argparse
 import ctypes
 import platform
@@ -41,14 +43,12 @@ def get_docker_image(platform_name: str, arch: str) -> str:
 
 def docker_platform(arch: str) -> str:
     """Convert architecture to Docker platform."""
-    if arch == "x86_64":
-        return "linux/amd64"
-    elif arch == "i686":
-        return "linux/386"
-    elif arch == "aarch64":
-        return "linux/arm64"
-    else:
-        return f"linux/{arch}"
+    arch_mapping = {
+        "x86_64": "linux/amd64",
+        "i686": "linux/386",
+        "aarch64": "linux/arm64",
+    }
+    return arch_mapping.get(arch, f"linux/{arch}")
 
 
 def build_in_docker(platform_name: str, arch: str) -> None:
@@ -88,9 +88,8 @@ def download_icu(version: str, dest_dir: Path) -> Path:
     tarball_path = dest_dir / f"icu4c-{version}.tgz"
 
     print(f"Downloading ICU {version} from {url}")
-    with urllib.request.urlopen(url) as response:
-        with open(tarball_path, "wb") as f:
-            f.write(response.read())
+    with urllib.request.urlopen(url) as response, open(tarball_path, "wb") as f:
+        f.write(response.read())
 
     print(f"Extracting {tarball_path}")
     with tarfile.open(tarball_path, "r:gz") as tar:
