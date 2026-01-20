@@ -4,6 +4,7 @@
 import argparse
 import ctypes
 import platform
+import shutil
 import subprocess
 import tarfile
 import urllib.request
@@ -125,31 +126,60 @@ def build_unix(source_dir: Path, install_dir: Path) -> None:
 
 
 def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
-    """Build ICU on Windows using CMake."""
-    build_dir = source_dir / "build"
-    build_dir.mkdir(exist_ok=True)
-
+    """Build ICU on Windows using MSBuild."""
     if arch == "AMD64":
-        cmake_arch = "x64"
+        platform = "x64"
     elif arch == "ARM64":
-        cmake_arch = "ARM64"
+        platform = "ARM64"
     else:
-        cmake_arch = "Win32"
+        platform = "Win32"
 
+    solution_file = source_dir / "allinone" / "allinone.sln"
+
+    # Build the solution
     run(
         [
-            "cmake",
-            "..",
-            f"-DCMAKE_INSTALL_PREFIX={install_dir.absolute()}",
-            "-DCMAKE_BUILD_TYPE=Release",
-            "-A",
-            cmake_arch,
-        ],
-        cwd=build_dir,
+            "msbuild",
+            str(solution_file),
+            "/p:Configuration=Release",
+            f"/p:Platform={platform}",
+            "/m",
+        ]
     )
 
-    run(["cmake", "--build", ".", "--config", "Release", "-j"], cwd=build_dir)
-    run(["cmake", "--install", "."], cwd=build_dir)
+    # Copy binaries to install directory
+    install_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine binary directory based on platform
+    if platform == "Win32":
+        bin_dir = source_dir / ".." / "bin"
+        lib_dir = source_dir / ".." / "lib"
+    elif platform == "x64":
+        bin_dir = source_dir / ".." / "bin64"
+        lib_dir = source_dir / ".." / "lib64"
+    else:  # ARM64
+        bin_dir = source_dir / ".." / "binARM64"
+        lib_dir = source_dir / ".." / "libARM64"
+
+    # Copy files
+    if bin_dir.exists():
+        shutil.copytree(bin_dir, install_dir / "bin", dirs_exist_ok=True)
+    if lib_dir.exists():
+        shutil.copytree(lib_dir, install_dir / "lib", dirs_exist_ok=True)
+
+    # Copy headers
+    include_src = source_dir / "common" / "unicode"
+    include_dest = install_dir / "include" / "unicode"
+    include_dest.mkdir(parents=True, exist_ok=True)
+    if include_src.exists():
+        shutil.copytree(include_src, include_dest, dirs_exist_ok=True)
+
+    # Copy data
+    data_dir = source_dir / ".." / "data"
+    if data_dir.exists():
+        shutil.copytree(
+            data_dir, install_dir / "share" / "icu" / ICU_VERSION, dirs_exist_ok=True
+        )
 
 
 def test_icu(install_dir: Path, version: str) -> None:

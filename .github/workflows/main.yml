@@ -55,6 +55,10 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Set up Visual Studio
+        uses: microsoft/setup-msbuild@v2
+        if: matrix.os == 'windows'
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         if: startsWith(matrix.os, 'linux') && matrix.arch != 'x86_64'
