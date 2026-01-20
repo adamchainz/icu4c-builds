@@ -124,6 +124,9 @@ def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
 
     run(configure_args, cwd=source_dir)
 
+    data_out_dir = source_dir / "data" / "out" / "tmp"
+    data_out_dir.mkdir(parents=True, exist_ok=True)
+
     nproc = subprocess.run(
         ["nproc"] if platform.system() == "Linux" else ["sysctl", "-n", "hw.ncpu"],
         stdout=subprocess.PIPE,
