@@ -1,0 +1,76 @@
+name: Build ICU4C
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+
+jobs:
+  build:
+    name: Build ICU4C for ${{ matrix.os }}-${{ matrix.arch }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: linux
+          arch: aarch64
+        - os: linux
+          arch: i686
+        - os: linux
+          arch: x86_64
+        - os: linux-musl
+          arch: aarch64
+        - os: linux-musl
+          arch: i686
+        - os: linux-musl
+          arch: x86_64
+        - os: macos
+          arch: arm64
+        - os: macos
+          arch: x86_64
+        - os: windows
+          arch: AMD64
+        - os: windows
+          arch: x86
+        - os: windows
+          arch: ARM64
+
+    runs-on:
+      ${{
+        (matrix.os == 'linux' && 'ubuntu-24.04')
+        || (matrix.os == 'linux-musl' && 'ubuntu-24.04')
+        || (matrix.os == 'macos' && matrix.arch == 'arm64' && 'macos-15')
+        || (matrix.os == 'macos' && matrix.arch == 'x86_64' && 'macos-15-intel')
+        || (matrix.os == 'windows' && 'windows-2022')
+        || 'unknown'
+      }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Visual Studio
+        uses: microsoft/setup-msbuild@v2
+        if: matrix.os == 'windows'
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        if: startsWith(matrix.os, 'linux') && matrix.arch != 'x86_64'
+        with:
+          platforms: all
+
+      - name: Build ICU4C
+        run: uv run build.py --platform ${{ matrix.os }} --arch ${{ matrix.arch }}
+
+      - name: List archive contents
+        shell: bash
+        run: tar -tzf dist/*.tar.gz
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: icu4c-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*.tar.gz
