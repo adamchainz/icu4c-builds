@@ -136,7 +136,13 @@ def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
 
     run(configure_args, cwd=source_dir)
 
-    run(["make"], cwd=source_dir)
+    nproc = subprocess.run(
+        ["nproc"] if platform.system() == "Linux" else ["sysctl", "-n", "hw.ncpu"],
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+
+    run(["make", f"-j{nproc}"], cwd=source_dir)
     run(["make", "install"], cwd=source_dir)
 
 
