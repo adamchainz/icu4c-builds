@@ -103,36 +103,24 @@ def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
     """Build ICU on Unix-like systems (Linux, macOS)."""
     run(["chmod", "+x", "configure", "runConfigureICU", "install-sh"], cwd=source_dir)
 
-    system = platform.system()
-    if system == "Linux":
-        if platform_name == "linux-musl":
-            icu_platform = "Linux"
-        else:
-            icu_platform = "Linux/gcc"
-    elif system == "Darwin":
+    if platform_name == "linux-musl":
+        icu_platform = "Linux"
+    elif platform_name == "linux":
+        icu_platform = "Linux/gcc"
+    elif platform_name == "macos":
         icu_platform = "macOS"
     else:
-        icu_platform = None
+        raise ValueError(f"Unexpected platform_name: {platform_name}")
 
-    if icu_platform:
-        configure_args = [
-            "./runConfigureICU",
-            icu_platform,
-            f"--prefix={install_dir.absolute()}",
-            "--with-data-packaging=archive",
-            "--disable-samples",
-            "--disable-renaming",
-            "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
-        ]
-    else:
-        configure_args = [
-            "./configure",
-            f"--prefix={install_dir.absolute()}",
-            "--with-data-packaging=archive",
-            "--disable-samples",
-            "--disable-renaming",
-            "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
-        ]
+    configure_args = [
+        "./runConfigureICU",
+        icu_platform,
+        f"--prefix={install_dir.absolute()}",
+        "--with-data-packaging=archive",
+        "--disable-samples",
+        "--disable-renaming",
+        "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
+    ]
 
     run(configure_args, cwd=source_dir)
 
