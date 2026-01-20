@@ -82,8 +82,7 @@ def build_in_docker(platform_name: str, arch: str) -> None:
 
 def download_icu(version: str, dest_dir: Path) -> Path:
     """Download ICU source tarball."""
-    icu_version_underscore = version.replace(".", "_")
-    url = f"https://github.com/unicode-org/icu/releases/download/release-{icu_version_underscore}/icu4c-{icu_version_underscore}-src.tgz"
+    url = f"https://github.com/unicode-org/icu/releases/download/release-{version}/icu4c-{version}-sources.tgz"
 
     tarball_path = dest_dir / f"icu4c-{version}.tgz"
 
