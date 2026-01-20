@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import os
 import platform
 import shutil
 import subprocess
@@ -212,7 +213,24 @@ def test_icu(install_dir: Path, version: str) -> None:
         print(f"Warning: Library not found at {lib_path}")
         return
 
+    dll_directory = None
+    if system == "Linux":
+        old_lib_path = os.environ.get("LD_LIBRARY_PATH", "")
+        os.environ["LD_LIBRARY_PATH"] = f"{lib_dir}:{old_lib_path}"
+    elif system == "Darwin":
+        old_lib_path = os.environ.get("DYLD_LIBRARY_PATH", "")
+        os.environ["DYLD_LIBRARY_PATH"] = f"{lib_dir}:{old_lib_path}"
+    elif system == "Windows" and hasattr(os, "add_dll_directory"):
+        dll_directory = os.add_dll_directory(str(lib_dir))
+
     lib = ctypes.CDLL(str(lib_path))
+
+    if system == "Linux":
+        os.environ["LD_LIBRARY_PATH"] = old_lib_path
+    elif system == "Darwin":
+        os.environ["DYLD_LIBRARY_PATH"] = old_lib_path
+    elif dll_directory is not None:
+        dll_directory.close()
 
     u_getVersion = lib.u_getVersion
     u_getVersion.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
