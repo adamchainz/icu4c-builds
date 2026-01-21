@@ -208,6 +208,9 @@ def test_icu(install_dir: Path, version: str) -> None:
         print(f"Unknown system {system}, skipping test")
         return
 
+    print(f"Contents of {lib_dir}:")
+    run(["ls", "-lah", str(lib_dir)])
+
     lib_path = lib_dir / lib_name
     if not lib_path.exists():
         print(f"Warning: Library not found at {lib_path}")
