@@ -213,24 +213,20 @@ def test_icu(install_dir: Path, version: str) -> None:
         print(f"Warning: Library not found at {lib_path}")
         return
 
-    dll_directory = None
-    if system == "Linux":
-        old_lib_path = os.environ.get("LD_LIBRARY_PATH", "")
-        os.environ["LD_LIBRARY_PATH"] = f"{lib_dir}:{old_lib_path}"
-    elif system == "Darwin":
-        old_lib_path = os.environ.get("DYLD_LIBRARY_PATH", "")
-        os.environ["DYLD_LIBRARY_PATH"] = f"{lib_dir}:{old_lib_path}"
-    elif system == "Windows" and hasattr(os, "add_dll_directory"):
-        dll_directory = os.add_dll_directory(str(lib_dir))
+    major_version = version.split(".")[0]
 
-    lib = ctypes.CDLL(str(lib_path))
-
-    if system == "Linux":
-        os.environ["LD_LIBRARY_PATH"] = old_lib_path
-    elif system == "Darwin":
-        os.environ["DYLD_LIBRARY_PATH"] = old_lib_path
-    elif dll_directory is not None:
+    if system == "Windows":
+        dll_directory = os.add_dll_directory(str(lib_dir))  # type: ignore
+        lib = ctypes.CDLL(str(lib_path))
         dll_directory.close()
+    elif system == "Linux":
+        ctypes.CDLL(str(lib_dir / f"libicudata.so.{major_version}"))
+        lib = ctypes.CDLL(str(lib_path))
+    elif system == "Darwin":
+        ctypes.CDLL(str(lib_dir / f"libicudata.{major_version}.dylib"))
+        lib = ctypes.CDLL(str(lib_path))
+    else:
+        raise ValueError(f"Unexpected system: {system}")
 
     u_getVersion = lib.u_getVersion
     u_getVersion.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
