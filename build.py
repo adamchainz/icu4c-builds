@@ -120,7 +120,6 @@ def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
         "--with-data-packaging=archive",
         "--disable-samples",
         "--disable-tests",
-        "--disable-renaming",
         "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
     ]
 
@@ -207,11 +206,14 @@ def test_icu(install_dir: Path, version: str) -> None:
     print(f"Contents of {lib_dir}:")
     run(["ls", "-lah", str(lib_dir)])
 
+    major_version = version.split(".")[0]
+    function_name = f"u_getVersion_{major_version}"
+
     # Run test in subprocess with library path set for all platforms
     test_script = dedent(f'''
         import ctypes
         lib = ctypes.CDLL("{(lib_dir / lib_name).absolute()}")
-        u_getVersion = lib.u_getVersion
+        u_getVersion = lib.{function_name}
         u_getVersion.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
         u_getVersion.restype = None
         version_array = (ctypes.c_uint8 * 4)()
