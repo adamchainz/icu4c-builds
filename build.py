@@ -214,7 +214,7 @@ def test_icu(install_dir: Path, version: str) -> None:
     major_version = version.split(".")[0]
 
     if system == "Windows":
-        dll_directory = os.add_dll_directory(str(lib_dir))  # type: ignore
+        dll_directory = os.add_dll_directory(str(lib_dir.absolute()))  # type: ignore
         lib = ctypes.CDLL(str(lib_path))
         dll_directory.close()
     elif system == "Linux":
