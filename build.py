@@ -8,7 +8,6 @@ import os
 import platform
 import shutil
 import subprocess
-import sys
 import tarfile
 import urllib.request
 from pathlib import Path
@@ -185,41 +184,60 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
 
 
 def test_icu(install_dir: Path, version: str) -> None:
-    """Test the built ICU library by loading it and checking the version."""
+    """Test the built ICU library by compiling and running a C program."""
     print("\nTesting ICU build...")
 
-    system = platform.system()
+    test_c = dedent("""
+        #include <unicode/uversion.h>
+        #include <stdio.h>
 
-    if system == "Linux":
-        lib_dir = install_dir / "lib"
-        lib_name = f"libicuuc.so.{version.split('.')[0]}"
-    elif system == "Darwin":
-        lib_dir = install_dir / "lib"
-        lib_name = f"libicuuc.{version.split('.')[0]}.dylib"
-    elif system == "Windows":
-        lib_dir = install_dir / "bin"
-        lib_name = f"icuuc{version.split('.')[0]}.dll"
-    else:
-        print(f"Unknown system {system}, skipping test")
-        return
-
-    print(f"Contents of {lib_dir}:")
-    run(["ls", "-lah", str(lib_dir)])
-
-    major_version = version.split(".")[0]
-    function_name = f"u_getVersion_{major_version}"
-
-    # Run test in subprocess with library path set for all platforms
-    test_script = dedent(f"""
-        import ctypes
-        lib = ctypes.CDLL({str((lib_dir / lib_name).absolute())!r})
-        u_getVersion = lib.{function_name}
-        u_getVersion.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
-        u_getVersion.restype = None
-        version_array = (ctypes.c_uint8 * 4)()
-        u_getVersion(version_array)
-        print(f"{{version_array[0]}}.{{version_array[1]}}")
+        int main() {
+            UVersionInfo versionArray;
+            u_getVersion(versionArray);
+            printf("%d.%d\\n", versionArray[0], versionArray[1]);
+            return 0;
+        }
     """)
+
+    test_dir = Path("build") / "test"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    test_c_path = test_dir / "test_icu.c"
+    test_c_path.write_text(test_c)
+
+    system = platform.system()
+    include_dir = install_dir / "include"
+    lib_dir = install_dir / ("lib" if system != "Windows" else "bin")
+
+    if system == "Windows":
+        test_exe = test_dir / "test_icu.exe"
+        lib_file = install_dir / "lib" / "icuuc.lib"
+
+        compile_cmd = [
+            "cl",
+            "/nologo",
+            f"/I{include_dir.absolute()}",
+            str(test_c_path),
+            f"/Fe{test_exe}",
+            "/link",
+            f"{lib_file.absolute()}",
+        ]
+    else:
+        test_exe = test_dir / "test_icu"
+
+        compile_cmd = [
+            "gcc" if system == "Linux" else "clang",
+            str(test_c_path),
+            f"-I{include_dir.absolute()}",
+            f"-L{lib_dir.absolute()}",
+            "-licuuc",
+            "-o",
+            str(test_exe),
+        ]
+
+    print("Compiling test program...")
+    run(compile_cmd, cwd=test_dir)
+
+    # Run the test program
     env = os.environ.copy()
     if system == "Linux":
         env["LD_LIBRARY_PATH"] = str(lib_dir.absolute())
@@ -228,16 +246,18 @@ def test_icu(install_dir: Path, version: str) -> None:
     elif system == "Windows":
         env["PATH"] = f"{lib_dir.absolute()};{env.get('PATH', '')}"
 
+    print("Running test program...")
     result = subprocess.run(
-        [sys.executable, "-c", test_script],
+        [str(test_exe.absolute())],
         env=env,
         stdout=subprocess.PIPE,
         text=True,
+        cwd=test_dir,
     )
     if result.returncode != 0:
-        raise SystemExit(result.returncode)
-    detected_version = result.stdout.strip()
+        raise SystemExit(1)
 
+    detected_version = result.stdout.strip()
     expected_version = ".".join(version.split(".")[:2])
 
     print(f"Detected ICU version: {detected_version}")
