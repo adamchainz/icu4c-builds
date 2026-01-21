@@ -4,14 +4,15 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import os
 import platform
 import shutil
 import subprocess
+import sys
 import tarfile
 import urllib.request
 from pathlib import Path
+from textwrap import dedent
 
 ICU_VERSION = "78.2"
 
@@ -206,38 +207,35 @@ def test_icu(install_dir: Path, version: str) -> None:
     print(f"Contents of {lib_dir}:")
     run(["ls", "-lah", str(lib_dir)])
 
-    lib_path = lib_dir / lib_name
-    if not lib_path.exists():
-        print(f"Warning: Library not found at {lib_path}")
-        return
-
-    major_version = version.split(".")[0]
-
-    if system == "Windows":
-        dll_directory = os.add_dll_directory(str(lib_dir.absolute()))  # type: ignore
-        lib = ctypes.CDLL(str(lib_path))
-        dll_directory.close()
-    elif system == "Linux":
-        ctypes.CDLL(
-            str(lib_dir / f"libicudata.so.{major_version}"),
-            # Use global mode to try and fix symbol resolution issues on MUSL Linux
-            mode=ctypes.RTLD_GLOBAL,
-        )
-        lib = ctypes.CDLL(str(lib_path))
+    # Run test in subprocess with library path set for all platforms
+    test_script = dedent(f'''
+        import ctypes
+        lib = ctypes.CDLL("{(lib_dir / lib_name).absolute()}")
+        u_getVersion = lib.u_getVersion
+        u_getVersion.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
+        u_getVersion.restype = None
+        version_array = (ctypes.c_uint8 * 4)()
+        u_getVersion(version_array)
+        print(f"{{version_array[0]}}.{{version_array[1]}}")
+    ''')
+    env = os.environ.copy()
+    if system == "Linux":
+        env["LD_LIBRARY_PATH"] = str(lib_dir.absolute())
     elif system == "Darwin":
-        ctypes.CDLL(str(lib_dir / f"libicudata.{major_version}.dylib"))
-        lib = ctypes.CDLL(str(lib_path))
-    else:
-        raise ValueError(f"Unexpected system: {system}")
+        env["DYLD_LIBRARY_PATH"] = str(lib_dir.absolute())
+    elif system == "Windows":
+        env["PATH"] = f"{lib_dir.absolute()};{env.get('PATH', '')}"
 
-    u_getVersion = lib.u_getVersion
-    u_getVersion.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
-    u_getVersion.restype = None
+    result = subprocess.run(
+        [sys.executable, "-c", test_script],
+        env=env,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
+    detected_version = result.stdout.strip()
 
-    version_array = (ctypes.c_uint8 * 4)()
-    u_getVersion(version_array)
-
-    detected_version = f"{version_array[0]}.{version_array[1]}"
     expected_version = ".".join(version.split(".")[:2])
 
     print(f"Detected ICU version: {detected_version}")
