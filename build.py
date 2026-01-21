@@ -183,7 +183,7 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
         )
 
 
-def test_icu(install_dir: Path, version: str) -> None:
+def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
     """Test the built ICU library by compiling and running a C program."""
     print("\nTesting ICU build...")
 
@@ -209,17 +209,58 @@ def test_icu(install_dir: Path, version: str) -> None:
     lib_dir = install_dir / ("lib" if system != "Windows" else "bin")
 
     if system == "Windows":
+        # Use MSBuild with a simple vcxproj file
         test_exe = test_dir / "test_icu.exe"
         lib_file = install_dir / "lib" / "icuuc.lib"
+        data_lib_file = install_dir / "lib" / "icudt.lib"
+
+        vcxproj = dedent(f"""<?xml version="1.0" encoding="utf-8"?>
+            <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+              <PropertyGroup Label="Globals">
+                <ProjectGuid>{{12345678-1234-1234-1234-123456789012}}</ProjectGuid>
+              </PropertyGroup>
+              <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.Default.props" />
+              <PropertyGroup Label="Configuration">
+                <ConfigurationType>Application</ConfigurationType>
+                <PlatformToolset>v143</PlatformToolset>
+              </PropertyGroup>
+              <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.props" />
+              <PropertyGroup>
+                <OutDir>{test_dir.absolute()}\\</OutDir>
+                <IntDir>{test_dir.absolute()}\\obj\\</IntDir>
+                <TargetName>test_icu</TargetName>
+              </PropertyGroup>
+              <ItemDefinitionGroup>
+                <ClCompile>
+                  <AdditionalIncludeDirectories>{include_dir.absolute()}</AdditionalIncludeDirectories>
+                </ClCompile>
+                <Link>
+                  <AdditionalDependencies>{lib_file.absolute()};{data_lib_file.absolute()};%(AdditionalDependencies)</AdditionalDependencies>
+                </Link>
+              </ItemDefinitionGroup>
+              <ItemGroup>
+                <ClCompile Include="{test_c_path.absolute()}" />
+              </ItemGroup>
+              <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.targets" />
+            </Project>
+        """)
+
+        vcxproj_path = test_dir / "test_icu.vcxproj"
+        vcxproj_path.write_text(vcxproj)
+
+        if arch == "AMD64":
+            msbuild_platform = "x64"
+        elif arch == "ARM64":
+            msbuild_platform = "ARM64"
+        else:
+            msbuild_platform = "Win32"
 
         compile_cmd = [
-            "cl",
+            "msbuild",
+            str(vcxproj_path),
+            "/p:Configuration=Release",
+            f"/p:Platform={msbuild_platform}",
             "/nologo",
-            f"/I{include_dir.absolute()}",
-            str(test_c_path),
-            f"/Fe{test_exe}",
-            "/link",
-            f"{lib_file.absolute()}",
         ]
     else:
         test_exe = test_dir / "test_icu"
@@ -324,7 +365,7 @@ def main() -> None:
         print(f"Unknown platform: {args.platform}")
         raise SystemExit(1)
 
-    test_icu(install_dir, ICU_VERSION)
+    test_icu(install_dir, ICU_VERSION, args.arch)
 
     args.output_dir.mkdir(exist_ok=True)
     package_build(install_dir, args.output_dir, ICU_VERSION, args.platform, args.arch)
