@@ -218,7 +218,11 @@ def test_icu(install_dir: Path, version: str) -> None:
         lib = ctypes.CDLL(str(lib_path))
         dll_directory.close()
     elif system == "Linux":
-        ctypes.CDLL(str(lib_dir / f"libicudata.so.{major_version}"))
+        ctypes.CDLL(
+            str(lib_dir / f"libicudata.so.{major_version}"),
+            # Use global mode to try and fix symbol resolution issues on MUSL Linux
+            mode=ctypes.RTLD_GLOBAL,
+        )
         lib = ctypes.CDLL(str(lib_path))
     elif system == "Darwin":
         ctypes.CDLL(str(lib_dir / f"libicudata.{major_version}.dylib"))
