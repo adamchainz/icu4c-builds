@@ -66,11 +66,7 @@ jobs:
       - name: Build ICU4C
         run: uv run build.py --platform ${{ matrix.os }} --arch ${{ matrix.arch }}
 
-      - run: ls -lh dist/
-        if: matrix.os != 'windows'
-
-      - run: dir dist/
-        if: matrix.os == 'windows'
+      - run: tar -tzf dist/*.tar.gz
 
       - uses: actions/upload-artifact@v6
         with:
