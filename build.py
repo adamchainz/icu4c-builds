@@ -244,9 +244,9 @@ def test_icu(install_dir: Path, version: str) -> None:
     print(f"Expected ICU version: {expected_version}")
 
     if detected_version == expected_version:
-        print("✓ ICU version check passed")
+        print("ICU version check passed")
     else:
-        print("✗ ICU version mismatch!")
+        print("ICU version mismatch!")
         raise SystemExit(1)
 
 
@@ -308,7 +308,7 @@ def main() -> None:
     args.output_dir.mkdir(exist_ok=True)
     package_build(install_dir, args.output_dir, ICU_VERSION, args.platform, args.arch)
 
-    print("\n✓ Build complete!")
+    print("\nBuild complete!")
 
 
 if __name__ == "__main__":
