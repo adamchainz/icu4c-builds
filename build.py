@@ -210,16 +210,16 @@ def test_icu(install_dir: Path, version: str) -> None:
     function_name = f"u_getVersion_{major_version}"
 
     # Run test in subprocess with library path set for all platforms
-    test_script = dedent(f'''
+    test_script = dedent(f"""
         import ctypes
-        lib = ctypes.CDLL("{(lib_dir / lib_name).absolute()}")
+        lib = ctypes.CDLL({str((lib_dir / lib_name).absolute())!r})
         u_getVersion = lib.{function_name}
         u_getVersion.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
         u_getVersion.restype = None
         version_array = (ctypes.c_uint8 * 4)()
         u_getVersion(version_array)
         print(f"{{version_array[0]}}.{{version_array[1]}}")
-    ''')
+    """)
     env = os.environ.copy()
     if system == "Linux":
         env["LD_LIBRARY_PATH"] = str(lib_dir.absolute())
