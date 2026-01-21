@@ -235,7 +235,7 @@ def test_icu(install_dir: Path, version: str) -> None:
         ]
 
     print("Compiling test program...")
-    run(compile_cmd, cwd=test_dir)
+    run(compile_cmd)
 
     # Run the test program
     env = os.environ.copy()
