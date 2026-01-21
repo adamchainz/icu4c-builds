@@ -230,6 +230,7 @@ def test_icu(install_dir: Path, version: str) -> None:
             f"-I{include_dir.absolute()}",
             f"-L{lib_dir.absolute()}",
             "-licuuc",
+            "-licudata",
             "-o",
             str(test_exe),
         ]
