@@ -128,8 +128,8 @@ def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
     data_out_dir.mkdir(parents=True, exist_ok=True)
 
     nproc = os.cpu_count() or 1
-    run(["make", f"-j{nproc}"], cwd=source_dir)
-    run(["make", "install"], cwd=source_dir)
+    run(["make", "-s", f"-j{nproc}"], cwd=source_dir)
+    run(["make", "-s", "install"], cwd=source_dir)
 
 
 def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
@@ -152,6 +152,7 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
                 "/p:Configuration=Release",
                 "/p:Platform=x64",
                 "/m",
+                "/v:minimal",
             ]
         )
 
@@ -162,6 +163,7 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
             "/p:Configuration=Release",
             f"/p:Platform={platform}",
             "/m",
+            "/v:minimal",
         ]
     )
 
@@ -286,6 +288,7 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
             "/p:Configuration=Release",
             f"/p:Platform={msbuild_platform}",
             "/nologo",
+            "/v:minimal",
         ]
     else:
         test_exe = test_dir / "test_icu"
