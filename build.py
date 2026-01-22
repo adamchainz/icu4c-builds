@@ -214,8 +214,21 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
         lib_file = install_dir / "lib" / "icuuc.lib"
         data_lib_file = install_dir / "lib" / "icudt.lib"
 
+        if arch == "AMD64":
+            msbuild_platform = "x64"
+        elif arch == "ARM64":
+            msbuild_platform = "ARM64"
+        else:
+            msbuild_platform = "Win32"
+
         vcxproj = dedent(f"""<?xml version="1.0" encoding="utf-8"?>
             <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+              <ItemGroup Label="ProjectConfigurations">
+                <ProjectConfiguration Include="Release|{msbuild_platform}">
+                  <Configuration>Release</Configuration>
+                  <Platform>{msbuild_platform}</Platform>
+                </ProjectConfiguration>
+              </ItemGroup>
               <PropertyGroup Label="Globals">
                 <ProjectGuid>{{12345678-1234-1234-1234-123456789012}}</ProjectGuid>
               </PropertyGroup>
