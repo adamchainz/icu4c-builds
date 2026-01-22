@@ -143,6 +143,18 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
 
     solution_file = source_dir / "allinone" / "allinone.sln"
 
+    if arch == "ARM64":
+        print("Building x64 tools first for ARM64 cross-compilation...")
+        run(
+            [
+                "msbuild",
+                str(solution_file),
+                "/p:Configuration=Release",
+                "/p:Platform=x64",
+                "/m",
+            ]
+        )
+
     run(
         [
             "msbuild",
