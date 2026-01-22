@@ -201,6 +201,13 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
     """Test the built ICU library by compiling and running a C program."""
     print("\nTesting ICU build...")
 
+    system = platform.system()
+
+    # Skip test for Windows ARM64 - can't run ARM64 binaries on x64 host
+    if system == "Windows" and arch == "ARM64":
+        print("Skipping test for Windows ARM64 (cross-compilation)")
+        return
+
     test_c = dedent("""
         #include <unicode/uversion.h>
         #include <stdio.h>
@@ -218,7 +225,6 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
     test_c_path = test_dir / "test_icu.c"
     test_c_path.write_text(test_c)
 
-    system = platform.system()
     include_dir = install_dir / "include"
     lib_dir = install_dir / ("lib" if system != "Windows" else "bin")
 
