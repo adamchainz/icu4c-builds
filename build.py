@@ -121,17 +121,19 @@ def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
         "--disable-tests",
         "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
     ]
-    if platform_name == "macos":
-        configure_args.append("LDFLAGS=-Wl,-headerpad_max_install_names")
 
-    run(configure_args, cwd=source_dir)
+    env = os.environ.copy()
+    if platform_name == "macos":
+        env["LDFLAGS"] = "-Wl,-headerpad_max_install_names"
+
+    run(configure_args, cwd=source_dir, env=env)
 
     data_out_dir = source_dir / "data" / "out" / "tmp"
     data_out_dir.mkdir(parents=True, exist_ok=True)
 
     nproc = os.cpu_count() or 1
-    run(["make", "-s", f"-j{nproc}"], cwd=source_dir)
-    run(["make", "-s", "install"], cwd=source_dir)
+    run(["make", "-s", f"-j{nproc}"], cwd=source_dir, env=env)
+    run(["make", "-s", "install"], cwd=source_dir, env=env)
 
 
 def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
