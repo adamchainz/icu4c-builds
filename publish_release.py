@@ -54,6 +54,14 @@ def run_command(args: list[str], check: bool = True) -> subprocess.CompletedProc
     return result
 
 
+def resolve_commit_sha(ref: str) -> str:
+    """Resolve @ or HEAD to the current commit SHA, otherwise return as-is."""
+    if ref in ("@", "HEAD"):
+        result = run_command(["git", "rev-parse", "HEAD"])
+        return result.stdout.strip()
+    return ref
+
+
 def get_workflow_run(workflow_path: str, commit_sha: str) -> dict | None:
     """Get the workflow run for the given commit."""
     runs_json = run_gh_command(
@@ -215,15 +223,17 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
 
+    commit_sha = resolve_commit_sha(args.sha)
+
     rprint(
-        f"[dim]Looking up workflow run for commit {args.sha}...[/dim]",
+        f"[dim]Looking up workflow run for commit {commit_sha}...[/dim]",
         file=sys.stderr,
     )
 
-    run = get_workflow_run(WORKFLOW_PATH, args.sha)
+    run = get_workflow_run(WORKFLOW_PATH, commit_sha)
     if not run:
         rprint(
-            f"[red]No workflow run found for commit {args.sha} and workflow {WORKFLOW_PATH}[/red]",
+            f"[red]No workflow run found for commit {commit_sha} and workflow {WORKFLOW_PATH}[/red]",
             file=sys.stderr,
         )
         return 1
@@ -271,7 +281,7 @@ def main(argv=None) -> int:
             print(artifact.name)
 
         if args.actually_publish:
-            create_release(args.version, args.sha, artifacts)
+            create_release(args.version, commit_sha, artifacts)
             rprint(
                 f"[green]✓ Successfully published release for version {args.version}[/green]"
             )
