@@ -116,7 +116,7 @@ def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
         "./runConfigureICU",
         icu_platform,
         f"--prefix={install_dir.absolute()}",
-        "--with-data-packaging=archive",
+        "--with-data-packaging=library",
         "--disable-samples",
         "--disable-tests",
         "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
