@@ -119,17 +119,21 @@ def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
         "--with-data-packaging=library",
         "--disable-samples",
         "--disable-tests",
-        "CPPFLAGS=-DU_CHARSET_IS_UTF8=1",
     ]
 
-    run(configure_args, cwd=source_dir)
+    env = os.environ.copy()
+    env["CPPFLAGS"] = "-DU_CHARSET_IS_UTF8=1"
+    if platform_name == "macos":
+        env["LDFLAGS"] = "-Wl,-headerpad_max_install_names"
+
+    run(configure_args, cwd=source_dir, env=env)
 
     data_out_dir = source_dir / "data" / "out" / "tmp"
     data_out_dir.mkdir(parents=True, exist_ok=True)
 
     nproc = os.cpu_count() or 1
-    run(["make", "-s", f"-j{nproc}"], cwd=source_dir)
-    run(["make", "-s", "install"], cwd=source_dir)
+    run(["make", "-s", f"-j{nproc}"], cwd=source_dir, env=env)
+    run(["make", "-s", "install"], cwd=source_dir, env=env)
 
 
 def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
@@ -210,12 +214,20 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
 
     test_c = dedent("""
         #include <unicode/uversion.h>
+        #include <unicode/platform.h>
         #include <stdio.h>
 
         int main() {
             UVersionInfo versionArray;
             u_getVersion(versionArray);
             printf("%d.%d\\n", versionArray[0], versionArray[1]);
+
+            #if U_CHARSET_IS_UTF8
+            printf("U_CHARSET_IS_UTF8=1\\n");
+            #else
+            printf("U_CHARSET_IS_UTF8=0\\n");
+            #endif
+
             return 0;
         }
     """)
@@ -333,7 +345,8 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
     if result.returncode != 0:
         raise SystemExit(1)
 
-    detected_version = result.stdout.strip()
+    output_lines = result.stdout.strip().splitlines()
+    detected_version = output_lines[0]
     expected_version = ".".join(version.split(".")[:2])
 
     print(f"Detected ICU version: {detected_version}")
@@ -344,6 +357,15 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
     else:
         print("ICU version mismatch!")
         raise SystemExit(1)
+
+    if system in ("Linux", "Darwin"):
+        charset_setting = output_lines[1]
+        print(f"Charset setting: {charset_setting}")
+        if charset_setting == "U_CHARSET_IS_UTF8=1":
+            print("U_CHARSET_IS_UTF8 check passed")
+        else:
+            print("U_CHARSET_IS_UTF8 check failed")
+            raise SystemExit(1)
 
 
 def package_build(
