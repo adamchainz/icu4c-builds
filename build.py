@@ -188,21 +188,15 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
     if lib_dir.exists():
         shutil.copytree(lib_dir, install_dir / "lib", dirs_exist_ok=True)
 
-    include_src = source_dir / "common" / "unicode"
-    include_dest = install_dir / "include" / "unicode"
-    include_dest.mkdir(parents=True, exist_ok=True)
-    if include_src.exists():
-        shutil.copytree(include_src, include_dest, dirs_exist_ok=True)
-
-    data_dir = source_dir / ".." / "data"
-    if data_dir.exists():
-        shutil.copytree(
-            data_dir, install_dir / "share" / "icu" / ICU_VERSION, dirs_exist_ok=True
-        )
+    shutil.copytree(
+        source_dir / ".." / "include",
+        install_dir / "include",
+        dirs_exist_ok=True,
+    )
 
 
 def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
-    """Test the built ICU library by compiling and running a C program."""
+    """Test the built ICU library by compiling and running a small C++ program."""
     print("\nTesting ICU build...")
 
     system = platform.system()
@@ -212,21 +206,47 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
         print("Skipping test for Windows ARM64 (cross-compilation)")
         return
 
-    test_c = dedent("""
+    test_cpp = dedent("""
         #include <unicode/uversion.h>
-        #include <unicode/platform.h>
-        #include <stdio.h>
+        #include <unicode/utypes.h>
+        #include <unicode/unistr.h>
+        #include <unicode/msgfmt.h>
+        #include <unicode/locid.h>
+        #include <iostream>
 
         int main() {
+            // Version check
             UVersionInfo versionArray;
             u_getVersion(versionArray);
-            printf("%d.%d\\n", versionArray[0], versionArray[1]);
+            std::cout << (int)versionArray[0] << "." << (int)versionArray[1] << "\\n";
 
-            #if U_CHARSET_IS_UTF8
-            printf("U_CHARSET_IS_UTF8=1\\n");
-            #else
-            printf("U_CHARSET_IS_UTF8=0\\n");
-            #endif
+            // MessageFormat test
+            UErrorCode status = U_ZERO_ERROR;
+
+            icu::Locale locale("en", "US");
+            icu::UnicodeString pattern(u"Hello {name}", -1);
+
+            icu::MessageFormat msgFmt(pattern, locale, status);
+            if (U_FAILURE(status)) {
+                std::cerr << "MessageFormat ctor failed: " << status << std::endl;
+                return 1;
+            }
+
+            icu::Formattable args[1];
+            const icu::UnicodeString argNames[] = { icu::UnicodeString(u"name", -1) };
+
+            args[0].setString(icu::UnicodeString(u"World", -1));
+
+            icu::UnicodeString result;
+            msgFmt.format(argNames, args, 1, result, status);
+            if (U_FAILURE(status)) {
+                std::cerr << "MessageFormat::format failed: " << status << std::endl;
+                return 1;
+            }
+
+            std::string utf8;
+            result.toUTF8String(utf8);
+            std::cout << utf8 << "\\n";
 
             return 0;
         }
@@ -234,17 +254,17 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
 
     test_dir = Path("build") / "test"
     test_dir.mkdir(parents=True, exist_ok=True)
-    test_c_path = test_dir / "test_icu.c"
-    test_c_path.write_text(test_c)
+    test_cpp_path = test_dir / "test_icu.cpp"
+    test_cpp_path.write_text(test_cpp)
 
     include_dir = install_dir / "include"
     lib_dir = install_dir / ("lib" if system != "Windows" else "bin")
 
     if system == "Windows":
-        # Use MSBuild with a simple vcxproj file
-        test_exe = test_dir / "test_icu.exe"
-        lib_file = install_dir / "lib" / "icuuc.lib"
-        data_lib_file = install_dir / "lib" / "icudt.lib"
+        exe_path = test_dir / "test_icu.exe"
+        lib_core = install_dir / "lib" / "icuuc.lib"
+        lib_i18n = install_dir / "lib" / "icuin.lib"
+        lib_data = install_dir / "lib" / "icudt.lib"
 
         if arch == "AMD64":
             msbuild_platform = "x64"
@@ -268,6 +288,7 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
               <PropertyGroup Label="Configuration">
                 <ConfigurationType>Application</ConfigurationType>
                 <PlatformToolset>v143</PlatformToolset>
+                <CharacterSet>Unicode</CharacterSet>
               </PropertyGroup>
               <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.props" />
               <PropertyGroup>
@@ -277,14 +298,15 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
               </PropertyGroup>
               <ItemDefinitionGroup>
                 <ClCompile>
+                  <LanguageStandard>stdcpplatest</LanguageStandard>
                   <AdditionalIncludeDirectories>{include_dir.absolute()}</AdditionalIncludeDirectories>
                 </ClCompile>
                 <Link>
-                  <AdditionalDependencies>{lib_file.absolute()};{data_lib_file.absolute()};%(AdditionalDependencies)</AdditionalDependencies>
+                  <AdditionalDependencies>{lib_core.absolute()};{lib_i18n.absolute()};{lib_data.absolute()};%(AdditionalDependencies)</AdditionalDependencies>
                 </Link>
               </ItemDefinitionGroup>
               <ItemGroup>
-                <ClCompile Include="{test_c_path.absolute()}" />
+                <ClCompile Include="{test_cpp_path.absolute()}" />
               </ItemGroup>
               <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.targets" />
             </Project>
@@ -292,13 +314,6 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
 
         vcxproj_path = test_dir / "test_icu.vcxproj"
         vcxproj_path.write_text(vcxproj)
-
-        if arch == "AMD64":
-            msbuild_platform = "x64"
-        elif arch == "ARM64":
-            msbuild_platform = "ARM64"
-        else:
-            msbuild_platform = "Win32"
 
         compile_cmd = [
             "msbuild",
@@ -309,34 +324,35 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
             "/v:minimal",
         ]
     else:
-        test_exe = test_dir / "test_icu"
+        exe_path = test_dir / "test_icu"
+        compiler = "g++" if system == "Linux" else "clang++"
 
         compile_cmd = [
-            "gcc" if system == "Linux" else "clang",
-            str(test_c_path),
+            compiler,
+            str(test_cpp_path),
             f"-I{include_dir.absolute()}",
             f"-L{lib_dir.absolute()}",
+            "-licui18n",
             "-licuuc",
             "-licudata",
+            "-std=c++17",
             "-o",
-            str(test_exe),
+            str(exe_path),
         ]
 
-    print("Compiling test program...")
     run(compile_cmd)
 
-    # Run the test program
     env = os.environ.copy()
     if system == "Linux":
         env["LD_LIBRARY_PATH"] = str(lib_dir.absolute())
     elif system == "Darwin":
         env["DYLD_LIBRARY_PATH"] = str(lib_dir.absolute())
     elif system == "Windows":
-        env["PATH"] = f"{lib_dir.absolute()};{env.get('PATH', '')}"
+        dll_dir = install_dir / "bin"
+        env["PATH"] = f"{dll_dir.absolute()};{env.get('PATH', '')}"
 
-    print("Running test program...")
     result = subprocess.run(
-        [str(test_exe.absolute())],
+        [str(exe_path.absolute())],
         env=env,
         stdout=subprocess.PIPE,
         text=True,
@@ -345,27 +361,26 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
     if result.returncode != 0:
         raise SystemExit(1)
 
-    output_lines = result.stdout.strip().splitlines()
-    detected_version = output_lines[0]
-    expected_version = ".".join(version.split(".")[:2])
-
-    print(f"Detected ICU version: {detected_version}")
-    print(f"Expected ICU version: {expected_version}")
-
-    if detected_version == expected_version:
-        print("ICU version check passed")
-    else:
-        print("ICU version mismatch!")
+    output_lines = [line for line in result.stdout.strip().splitlines() if line]
+    if len(output_lines) < 2:
+        print("Unexpected C++ ICU test output")
         raise SystemExit(1)
 
-    if system in ("Linux", "Darwin"):
-        charset_setting = output_lines[1]
-        print(f"Charset setting: {charset_setting}")
-        if charset_setting == "U_CHARSET_IS_UTF8=1":
-            print("U_CHARSET_IS_UTF8 check passed")
-        else:
-            print("U_CHARSET_IS_UTF8 check failed")
-            raise SystemExit(1)
+    detected_version = output_lines[0].strip()
+    expected_version = ".".join(version.split(".")[:2])
+    print(f"Detected ICU version (C++ test): {detected_version}")
+    print(f"Expected ICU version: {expected_version}")
+    if detected_version != expected_version:
+        print("ICU version mismatch in C++ test!")
+        raise SystemExit(1)
+
+    formatted = output_lines[1].strip()
+    print(f"MessageFormat output: {formatted!r}")
+    if formatted != "Hello World":
+        print("Unexpected MessageFormat output")
+        raise SystemExit(1)
+
+    print("ICU C++ MessageFormat test passed")
 
 
 def package_build(
