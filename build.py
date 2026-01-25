@@ -188,17 +188,11 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
     if lib_dir.exists():
         shutil.copytree(lib_dir, install_dir / "lib", dirs_exist_ok=True)
 
-    include_src = source_dir / "common" / "unicode"
-    include_dest = install_dir / "include" / "unicode"
-    include_dest.mkdir(parents=True, exist_ok=True)
-    if include_src.exists():
-        shutil.copytree(include_src, include_dest, dirs_exist_ok=True)
-
-    data_dir = source_dir / ".." / "data"
-    if data_dir.exists():
-        shutil.copytree(
-            data_dir, install_dir / "share" / "icu" / ICU_VERSION, dirs_exist_ok=True
-        )
+    shutil.copytree(
+        source_dir / ".." / "include",
+        install_dir / "include",
+        dirs_exist_ok=True,
+    )
 
 
 def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
