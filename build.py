@@ -12,6 +12,7 @@ import tarfile
 import urllib.request
 from pathlib import Path
 from textwrap import dedent
+from typing import assert_never
 
 ICU_VERSION = "78.2"
 
@@ -22,6 +23,28 @@ def run(cmd: list[str], **kwargs) -> None:
     result = subprocess.run(cmd, **kwargs)
     if result.returncode != 0:
         raise SystemExit(result.returncode)
+
+
+def detect_arch() -> str:
+    """Detect the current architecture."""
+    system = platform.system()
+    machine = platform.machine().lower()
+
+    if system == "Windows":
+        machine_upper = platform.machine().upper()
+        if machine_upper in ("AMD64", "X86_64"):
+            return "AMD64"
+        elif machine_upper == "ARM64":
+            return "ARM64"
+        else:
+            return machine_upper
+
+    if machine in ("x86_64", "amd64"):
+        return "x86_64"
+    elif machine in ("aarch64", "arm64"):
+        return "aarch64"
+    else:
+        return machine
 
 
 def get_docker_image(platform_name: str, arch: str) -> str:
@@ -42,20 +65,9 @@ def get_docker_image(platform_name: str, arch: str) -> str:
             return f"quay.io/pypa/musllinux_1_2_{arch}"
 
 
-def docker_platform(arch: str) -> str:
-    """Convert architecture to Docker platform."""
-    arch_mapping = {
-        "x86_64": "linux/amd64",
-        "i686": "linux/386",
-        "aarch64": "linux/arm64",
-    }
-    return arch_mapping.get(arch, f"linux/{arch}")
-
-
 def build_in_docker(platform_name: str, arch: str) -> None:
     """Build ICU inside a Docker container."""
     image = get_docker_image(platform_name, arch)
-    docker_plat = docker_platform(arch)
 
     work_dir = Path.cwd()
 
@@ -67,15 +79,11 @@ def build_in_docker(platform_name: str, arch: str) -> None:
         f"{work_dir}:/work",
         "-w",
         "/work",
-        "--platform",
-        docker_plat,
         image,
         "python3",
         "build.py",
         "--platform",
         platform_name,
-        "--arch",
-        arch,
         "--in-docker",
     ]
 
@@ -99,7 +107,9 @@ def download_icu(version: str, dest_dir: Path) -> Path:
     return dest_dir / "icu" / "source"
 
 
-def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
+def build_unix(
+    source_dir: Path, install_dir: Path, platform_name: str, arch: str
+) -> None:
     """Build ICU on Unix-like systems (Linux, macOS)."""
     run(["chmod", "+x", "configure", "runConfigureICU", "install-sh"], cwd=source_dir)
 
@@ -139,33 +149,20 @@ def build_unix(source_dir: Path, install_dir: Path, platform_name: str) -> None:
 def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
     """Build ICU on Windows using MSBuild."""
     if arch == "AMD64":
-        platform = "x64"
+        msbuild_platform = "x64"
     elif arch == "ARM64":
-        platform = "ARM64"
+        msbuild_platform = "ARM64"
     else:
-        platform = "Win32"
+        raise ValueError(f"Unsupported Windows architecture: {arch}")
 
     solution_file = source_dir / "allinone" / "allinone.sln"
-
-    if arch == "ARM64":
-        print("Building x64 tools first for ARM64 cross-compilation...")
-        run(
-            [
-                "msbuild",
-                str(solution_file),
-                "/p:Configuration=Release",
-                "/p:Platform=x64",
-                "/m",
-                "/v:minimal",
-            ]
-        )
 
     run(
         [
             "msbuild",
             str(solution_file),
             "/p:Configuration=Release",
-            f"/p:Platform={platform}",
+            f"/p:Platform={msbuild_platform}",
             "/m",
             "/v:minimal",
         ]
@@ -173,38 +170,27 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
 
     install_dir.mkdir(parents=True, exist_ok=True)
 
-    if platform == "Win32":
-        bin_dir = source_dir / ".." / "bin"
-        lib_dir = source_dir / ".." / "lib"
-    elif platform == "x64":
+    if msbuild_platform == "x64":
         bin_dir = source_dir / ".." / "bin64"
         lib_dir = source_dir / ".." / "lib64"
-    else:
+    elif msbuild_platform == "ARM64":
         bin_dir = source_dir / ".." / "binARM64"
         lib_dir = source_dir / ".." / "libARM64"
+    else:
+        assert_never(msbuild_platform)
 
-    if bin_dir.exists():
-        shutil.copytree(bin_dir, install_dir / "bin", dirs_exist_ok=True)
-    if lib_dir.exists():
-        shutil.copytree(lib_dir, install_dir / "lib", dirs_exist_ok=True)
-
+    shutil.copytree(bin_dir, install_dir / "bin", dirs_exist_ok=True)
+    shutil.copytree(lib_dir, install_dir / "lib", dirs_exist_ok=True)
     shutil.copytree(
-        source_dir / ".." / "include",
-        install_dir / "include",
-        dirs_exist_ok=True,
+        source_dir / ".." / "include", install_dir / "include", dirs_exist_ok=True
     )
 
 
-def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
+def test_icu(install_dir: Path, version: str, arch: str) -> None:
     """Test the built ICU library by compiling and running a small C++ program."""
     print("\nTesting ICU build...")
 
     system = platform.system()
-
-    # Skip test for Windows ARM64 - can't run ARM64 binaries on x64 host
-    if system == "Windows" and arch == "ARM64":
-        print("Skipping test for Windows ARM64 (cross-compilation)")
-        return
 
     test_cpp = dedent("""
         #include <unicode/uversion.h>
@@ -271,7 +257,7 @@ def test_icu(install_dir: Path, version: str, arch: str = "") -> None:
         elif arch == "ARM64":
             msbuild_platform = "ARM64"
         else:
-            msbuild_platform = "Win32"
+            raise ValueError(f"Unsupported Windows architecture: {arch}")
 
         vcxproj = dedent(f"""<?xml version="1.0" encoding="utf-8"?>
             <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
@@ -407,9 +393,6 @@ def main() -> None:
         help="Platform name (linux, linux-musl, macos, windows)",
     )
     parser.add_argument(
-        "--arch", required=True, help="Architecture (x86_64, aarch64, etc.)"
-    )
-    parser.add_argument(
         "--output-dir", type=Path, default=Path("dist"), help="Output directory"
     )
     parser.add_argument(
@@ -417,8 +400,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    arch = detect_arch()
+    print(f"Detected architecture: {arch}")
+
     if args.platform in ("linux", "linux-musl") and not args.in_docker:
-        build_in_docker(args.platform, args.arch)
+        build_in_docker(args.platform, arch)
         return
 
     work_dir = Path("build")
@@ -429,17 +415,17 @@ def main() -> None:
     source_dir = download_icu(ICU_VERSION, work_dir)
 
     if args.platform in ("linux", "linux-musl", "macos"):
-        build_unix(source_dir, install_dir, args.platform)
+        build_unix(source_dir, install_dir, args.platform, arch)
     elif args.platform == "windows":
-        build_windows(source_dir, install_dir, args.arch)
+        build_windows(source_dir, install_dir, arch)
     else:
         print(f"Unknown platform: {args.platform}")
         raise SystemExit(1)
 
-    test_icu(install_dir, ICU_VERSION, args.arch)
+    test_icu(install_dir, ICU_VERSION, arch)
 
     args.output_dir.mkdir(exist_ok=True)
-    package_build(install_dir, args.output_dir, ICU_VERSION, args.platform, args.arch)
+    package_build(install_dir, args.output_dir, ICU_VERSION, args.platform, arch)
 
     print("\nBuild complete!")
 

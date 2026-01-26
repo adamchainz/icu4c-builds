@@ -17,13 +17,9 @@ jobs:
         - os: linux
           arch: aarch64
         - os: linux
-          arch: i686
-        - os: linux
           arch: x86_64
         - os: linux-musl
           arch: aarch64
-        - os: linux-musl
-          arch: i686
         - os: linux-musl
           arch: x86_64
         - os: macos
@@ -33,16 +29,17 @@ jobs:
         - os: windows
           arch: AMD64
         - os: windows
-          arch: x86
-        - os: windows
           arch: ARM64
 
     runs-on:
       ${{
-        (matrix.os == 'linux' && 'ubuntu-24.04')
+        (matrix.os == 'linux' && matrix.arch == 'aarch64' && 'ubuntu-24.04-arm')
+        || (matrix.os == 'linux' && 'ubuntu-24.04')
+        || (matrix.os == 'linux-musl' && matrix.arch == 'aarch64' && 'ubuntu-24.04-arm')
         || (matrix.os == 'linux-musl' && 'ubuntu-24.04')
         || (matrix.os == 'macos' && matrix.arch == 'arm64' && 'macos-15')
         || (matrix.os == 'macos' && matrix.arch == 'x86_64' && 'macos-15-intel')
+        || (matrix.os == 'windows' && matrix.arch == 'ARM64' && 'windows-11-arm')
         || (matrix.os == 'windows' && 'windows-2022')
         || 'unknown'
       }}
@@ -57,14 +54,8 @@ jobs:
         uses: microsoft/setup-msbuild@v2
         if: matrix.os == 'windows'
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        if: startsWith(matrix.os, 'linux') && matrix.arch != 'x86_64'
-        with:
-          platforms: all
-
       - name: Build ICU4C
-        run: uv run build.py --platform ${{ matrix.os }} --arch ${{ matrix.arch }}
+        run: uv run build.py --platform ${{ matrix.os }}
 
       - name: List archive contents
         shell: bash
