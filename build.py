@@ -113,9 +113,7 @@ def build_unix(
     """Build ICU on Unix-like systems (Linux, macOS)."""
     run(["chmod", "+x", "configure", "runConfigureICU", "install-sh"], cwd=source_dir)
 
-    if platform_name == "linux-musl":
-        icu_platform = "Linux"
-    elif platform_name == "linux":
+    if platform_name in ("linux", "linux-musl"):
         icu_platform = "Linux/gcc"
     elif platform_name == "macos":
         icu_platform = "macOS"
@@ -133,8 +131,13 @@ def build_unix(
 
     env = os.environ.copy()
     env["CPPFLAGS"] = "-DU_CHARSET_IS_UTF8=1"
+
     if platform_name == "macos":
-        env["LDFLAGS"] = "-Wl,-headerpad_max_install_names"
+        env["CXXFLAGS"] = "-O3 -flto"
+        env["CFLAGS"] = "-O3 -flto"
+        env["LDFLAGS"] = "-flto -Wl,-headerpad_max_install_names"
+    else:
+        env["LDFLAGS"] = "-flto"
 
     run(configure_args, cwd=source_dir, env=env)
 
@@ -163,6 +166,8 @@ def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
             str(solution_file),
             "/p:Configuration=Release",
             f"/p:Platform={msbuild_platform}",
+            "/p:WholeProgramOptimization=true",
+            "/p:LinkTimeCodeGeneration=UseLinkTimeCodeGeneration",
             "/m",
             "/v:minimal",
         ]
