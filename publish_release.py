@@ -223,6 +223,14 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
 
+    current_branch = run_command(["git", "branch", "--show-current"]).stdout.strip()
+    if current_branch != "main":
+        rprint(
+            f"[red]Error: Current branch is '{current_branch}'. Releases can only be published from the 'main' branch.[/red]",
+            file=sys.stderr,
+        )
+        return 1
+
     commit_sha = resolve_commit_sha(args.sha)
 
     rprint(
