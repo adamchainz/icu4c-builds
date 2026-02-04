@@ -111,8 +111,6 @@ def build_unix(
     source_dir: Path, install_dir: Path, platform_name: str, arch: str
 ) -> None:
     """Build ICU on Unix-like systems (Linux, macOS)."""
-    run(["chmod", "+x", "configure", "runConfigureICU", "install-sh"], cwd=source_dir)
-
     if platform_name in ("linux", "linux-musl"):
         icu_platform = "Linux/gcc"
     elif platform_name == "macos":
@@ -136,6 +134,7 @@ def build_unix(
         env["CXXFLAGS"] = "-O3 -flto"
         env["CFLAGS"] = "-O3 -flto"
         env["LDFLAGS"] = "-flto -Wl,-headerpad_max_install_names"
+        env["MACOSX_DEPLOYMENT_TARGET"] = "10.9"
     else:
         env["LDFLAGS"] = "-flto"
 
