@@ -175,7 +175,9 @@ def extract_artifacts(download_dir: Path) -> list[Path]:
     return artifacts
 
 
-def create_release(version: str, commit_sha: str, artifacts: list[Path]) -> None:
+def create_release(
+    version: str, commit_sha: str, notes: str, artifacts: list[Path]
+) -> None:
     """Create a GitHub release with the given artifacts."""
     tag_name = f"v{version}"
     release_name = f"ICU4C {version}"
@@ -192,7 +194,7 @@ def create_release(version: str, commit_sha: str, artifacts: list[Path]) -> None
         "--target",
         commit_sha,
         "--notes",
-        f"ICU4C version {version} builds for multiple platforms",
+        notes,
     ]
 
     for artifact in artifacts:
@@ -214,6 +216,11 @@ def main(argv=None) -> int:
     parser.add_argument(
         "version",
         help="Version number for the release (e.g., '78.2')",
+    )
+    parser.add_argument(
+        "--notes",
+        required=True,
+        help="Release notes for the release",
     )
     parser.add_argument(
         "--actually-publish",
@@ -289,7 +296,7 @@ def main(argv=None) -> int:
             print(artifact.name)
 
         if args.actually_publish:
-            create_release(args.version, commit_sha, artifacts)
+            create_release(args.version, commit_sha, args.notes, artifacts)
             rprint(
                 f"[green]✓ Successfully published release for version {args.version}[/green]"
             )
