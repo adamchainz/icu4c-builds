@@ -51,7 +51,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Set up Visual Studio
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
         if: matrix.os == 'windows'
 
       - name: Build ICU4C
@@ -61,7 +61,7 @@ jobs:
         shell: bash
         run: tar -tzf dist/*.tar.gz
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: icu4c-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/*.tar.gz
