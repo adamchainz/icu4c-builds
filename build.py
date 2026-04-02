@@ -14,7 +14,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import assert_never
 
-ICU_VERSION = "78.2"
+ICU_VERSION = "78.3"
 
 
 def run(cmd: list[str], **kwargs) -> None:
