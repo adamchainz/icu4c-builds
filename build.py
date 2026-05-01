@@ -131,11 +131,28 @@ def build_unix(
     env["CPPFLAGS"] = "-DU_CHARSET_IS_UTF8=1"
 
     if platform_name == "macos":
-        env["CXXFLAGS"] = "-O3 -flto"
-        env["CFLAGS"] = "-O3 -flto"
+        common_flags = " ".join(
+            [
+                "-O3",
+                "-flto",
+                "-fno-omit-frame-pointer",
+                "-mno-omit-leaf-frame-pointer",
+            ]
+        )
+        env["CXXFLAGS"] = common_flags
+        env["CFLAGS"] = common_flags
         env["LDFLAGS"] = "-flto -Wl,-headerpad_max_install_names"
         env["MACOSX_DEPLOYMENT_TARGET"] = "10.9"
     else:
+        common_flags = " ".join(
+            [
+                "-O3",
+                "-fno-omit-frame-pointer",
+                "-mno-omit-leaf-frame-pointer",
+            ]
+        )
+        env["CXXFLAGS"] = common_flags
+        env["CFLAGS"] = common_flags
         env["LDFLAGS"] = "-flto"
 
     run(configure_args, cwd=source_dir, env=env)
