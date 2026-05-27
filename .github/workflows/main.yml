@@ -31,37 +31,30 @@ jobs:
         - os: windows
           arch: ARM64
 
-    runs-on:
-      ${{
-        (matrix.os == 'linux' && matrix.arch == 'aarch64' && 'ubuntu-24.04-arm')
-        || (matrix.os == 'linux' && 'ubuntu-24.04')
-        || (matrix.os == 'linux-musl' && matrix.arch == 'aarch64' && 'ubuntu-24.04-arm')
-        || (matrix.os == 'linux-musl' && 'ubuntu-24.04')
-        || (matrix.os == 'macos' && matrix.arch == 'arm64' && 'macos-15')
-        || (matrix.os == 'macos' && matrix.arch == 'x86_64' && 'macos-15-intel')
-        || (matrix.os == 'windows' && matrix.arch == 'ARM64' && 'windows-11-arm')
-        || (matrix.os == 'windows' && 'windows-2022')
-        || 'unknown'
-      }}
+    runs-on: ${{ (matrix.os == 'linux' && matrix.arch == 'aarch64' && 'ubuntu-24.04-arm') || (matrix.os == 'linux' && 'ubuntu-24.04') || (matrix.os == 'linux-musl' && matrix.arch == 'aarch64' && 'ubuntu-24.04-arm') || (matrix.os == 'linux-musl' && 'ubuntu-24.04') || (matrix.os == 'macos' && matrix.arch == 'arm64' && 'macos-15') || (matrix.os == 'macos' && matrix.arch == 'x86_64' && 'macos-15-intel') || (matrix.os == 'windows' && matrix.arch == 'ARM64' && 'windows-11-arm') || (matrix.os == 'windows' && 'windows-2022') || 'unknown' }}
 
     steps:
-      - uses: actions/checkout@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+    - name: Install uv
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      with:
+        enable-cache: false
 
-      - name: Set up Visual Studio
-        uses: microsoft/setup-msbuild@v3
-        if: matrix.os == 'windows'
+    - name: Set up Visual Studio
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
+      if: matrix.os == 'windows'
 
-      - name: Build ICU4C
-        run: uv run build.py --platform ${{ matrix.os }}
+    - name: Build ICU4C
+      run: uv run build.py --platform ${{ matrix.os }}
 
-      - name: List archive contents
-        shell: bash
-        run: tar -tzf dist/*.tar.gz
+    - name: List archive contents
+      shell: bash
+      run: tar -tzf dist/*.tar.gz
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: icu4c-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/*.tar.gz
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: icu4c-${{ matrix.os }}-${{ matrix.arch }}
+        path: dist/*.tar.gz
