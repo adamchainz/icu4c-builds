@@ -42,6 +42,7 @@ jobs:
       uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
       with:
         enable-cache: false
+        python-version: '3.15'
 
     - name: Set up Visual Studio
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
