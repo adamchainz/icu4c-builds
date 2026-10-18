@@ -165,8 +165,44 @@ def build_unix(
     run(["make", "-s", "install"], cwd=source_dir, env=env)
 
 
+def patch_windows_platform_toolset(source_dir: Path) -> None:
+    """
+    Backport ICU-23247 to support Visual Studio 2026 (v145 toolset):
+    https://github.com/unicode-org/icu/commit/f23381d83cdd98199247adafc85851ce9c2e143f
+    """
+    assert int(ICU_VERSION.split(".")[0]) < 79, (
+        "ICU 79+ includes ICU-23247, remove patch_windows_platform_toolset()"
+    )
+
+    props_path = source_dir / "allinone" / "Build.Windows.PlatformToolset.props"
+    text = props_path.read_text()
+    if "v145" in text:
+        return
+
+    replacements = [
+        (
+            """<AutoDetectedPlatformToolset Condition="'$(BuildToolVersion)'=='17.0'">v143</AutoDetectedPlatformToolset>""",
+            """<AutoDetectedPlatformToolset Condition="'$(BuildToolVersion)'=='17.0'">v143</AutoDetectedPlatformToolset>
+    <AutoDetectedPlatformToolset Condition="'$(BuildToolVersion)'=='18.0'">v145</AutoDetectedPlatformToolset>""",
+        ),
+        (
+            """'$(PlatformToolset)'=='v143')">""",
+            """'$(PlatformToolset)'=='v143' or '$(PlatformToolset)'=='v145')">""",
+        ),
+    ]
+    for old, new in replacements:
+        if old not in text:
+            raise SystemExit(f"Could not patch {props_path}: {old!r} not found")
+        text = text.replace(old, new)
+
+    props_path.write_text(text)
+    print(f"Patched {props_path} for Visual Studio 2026 support")
+
+
 def build_windows(source_dir: Path, install_dir: Path, arch: str) -> None:
     """Build ICU on Windows using MSBuild."""
+    patch_windows_platform_toolset(source_dir)
+
     if arch == "AMD64":
         msbuild_platform = "x64"
     elif arch == "ARM64":
@@ -294,7 +330,7 @@ def test_icu(install_dir: Path, version: str, arch: str) -> None:
               <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.Default.props" />
               <PropertyGroup Label="Configuration">
                 <ConfigurationType>Application</ConfigurationType>
-                <PlatformToolset>v143</PlatformToolset>
+                <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
                 <CharacterSet>Unicode</CharacterSet>
               </PropertyGroup>
               <Import Project="$(VCTargetsPath)\\Microsoft.Cpp.props" />
