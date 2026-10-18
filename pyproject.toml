@@ -7,7 +7,7 @@ classifiers = [
   "Programming Language :: Python :: 3.15",
 ]
 dependencies = [
-  "cibuildwheel>=3.3.1",
+  "cibuildwheel>=4.3.1",
 ]
 
 [tool.ruff]
