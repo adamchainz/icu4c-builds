@@ -479,6 +479,8 @@ def main() -> None:
         print(f"Unknown platform: {args.platform}")
         raise SystemExit(1)
 
+    shutil.copy2(source_dir.parent / "LICENSE", install_dir / "LICENSE")
+
     test_icu(install_dir, ICU_VERSION, arch)
 
     args.output_dir.mkdir(exist_ok=True)
