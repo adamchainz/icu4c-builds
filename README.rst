@@ -14,3 +14,5 @@ icu4c-builds
 Pre-built `ICU4C (International Components for Unicode) <https://icu.unicode.org/>`_ libraries for multiple platforms and architectures.
 
 This repository builds ICU4C from source and publishes the compiled libraries in a GitHub release specifically for building `icu4py <https://github.com/adamchainz/icu4py>`__.
+
+Each archive includes ICU’s licence at its root, as ``LICENSE``.
